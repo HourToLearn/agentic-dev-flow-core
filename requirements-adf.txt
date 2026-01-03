@@ -1,0 +1,9 @@
+# ADF (Agentic Dev Flow) Dependencies
+# Install with: pip install -r requirements-adf.txt
+
+# Core ADF dependencies
+# Type validation and data models
+pydantic==2.12.5
+
+# Note: FastAPI, Uvicorn, and Schedule removed
+# No longer needed - GitHub Actions handles triggering

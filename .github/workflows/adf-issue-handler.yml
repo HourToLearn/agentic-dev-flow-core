@@ -1,0 +1,193 @@
+name: ADF Issue Handler
+
+on:
+  issues:
+    types: [opened]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  health-check:
+    name: Health Check
+    runs-on: ubuntu-latest
+    outputs:
+      healthy: ${{ steps.check.outputs.healthy }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements-adf.txt
+
+      - name: Run health check
+        id: check
+        run: |
+          if python -m adf.health_check; then
+            echo "healthy=true" >> $GITHUB_OUTPUT
+          else
+            echo "healthy=false" >> $GITHUB_OUTPUT
+          fi
+
+  process-issue:
+    name: Process Issue
+    needs: health-check
+    if: |
+      needs.health-check.outputs.healthy == 'true' &&
+      (
+        (github.event_name == 'issues' && github.event.action == 'opened') ||
+        (github.event_name == 'issue_comment' && contains(github.event.comment.body, 'adf'))
+      )
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        run: |
+          pip install -r requirements-adf.txt
+
+      - name: Install GitHub CLI
+        run: |
+          type -p wget >/dev/null || (sudo apt update && sudo apt-get install wget -y)
+          sudo mkdir -p -m 755 /etc/apt/keyrings
+          wget -qO- https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null
+          sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+          sudo apt update
+          sudo apt install gh -y
+
+      - name: Authenticate GitHub CLI
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+
+      - name: Install Claude CLI
+        run: |
+          curl -fsSL https://install.claude.ai | sh
+
+      - name: Setup Claude CLI Path
+        run: |
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Authenticate Claude CLI
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "Error: ANTHROPIC_API_KEY is not set"
+            exit 1
+          fi
+
+      - name: Verify Claude CLI
+        run: |
+          claude --version
+
+      - name: Configure Git
+        run: |
+          git config user.name "ADF Bot"
+          git config user.email "adf-bot@users.noreply.github.com"
+
+      - name: Get Issue Number
+        id: issue
+        run: |
+          if [ "${{ github.event_name }}" == "issues" ]; then
+            echo "number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
+          else
+            echo "number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run ADF Orchestrator
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLAUDE_CODE_PATH: claude
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          python -m adf.adf_orchestrator ${{ steps.issue.outputs.number }}
+        continue-on-error: true
+        id: orchestrator
+
+      - name: Upload Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: adf-artifacts-issue-${{ steps.issue.outputs.number }}
+          path: |
+            agents/
+            specs/
+            adf-logs/
+          retention-days: 30
+
+      - name: Comment on Success
+        if: steps.orchestrator.outcome == 'success'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const workflowUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
+            await github.rest.issues.createComment({
+              issue_number: ${{ steps.issue.outputs.number }},
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## ✅ ADF Workflow Completed Successfully!
+            
+            **Workflow Run**: [View Logs](${workflowUrl})
+            
+            The implementation has been completed and a pull request should have been created.
+            
+            ---
+            *Generated by ADF (Agentic Dev Flow)*`
+            });
+
+      - name: Comment on Failure
+        if: steps.orchestrator.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const workflowUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
+            await github.rest.issues.createComment({
+              issue_number: ${{ steps.issue.outputs.number }},
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## ❌ ADF Workflow Failed
+            
+            **Workflow Run**: [View Logs](${workflowUrl})
+            
+            The automated implementation encountered an error. Please check the logs for details.
+            
+            ---
+            *Generated by ADF (Agentic Dev Flow)*`
+            });
+
+  cleanup:
+    name: Cleanup on Failure
+    needs: process-issue
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cleanup artifacts
+        run: |
+          echo "Performing cleanup operations..."

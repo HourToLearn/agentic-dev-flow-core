@@ -1,0 +1,163 @@
+# Agentic Dev Flow (ADF) Configuration
+# Customize ADF behavior for your project
+
+adf:
+  version: "1.0"
+
+  # ===========================================================================
+  # ISSUE PROCESSING
+  # ===========================================================================
+
+  # Which types of issues should ADF process?
+  issue_types:
+    - feature
+    - bug
+    - chore
+
+  # ===========================================================================
+  # TRIGGER CONFIGURATION
+  # ===========================================================================
+
+  trigger:
+    # Should ADF automatically process newly created issues?
+    # If false, users must comment with trigger_keyword to start processing
+    auto_process_new_issues: false
+
+    # Keyword to trigger ADF processing when commented on an issue
+    trigger_keyword: "adf"
+
+  # ===========================================================================
+  # BRANCH NAMING
+  # ===========================================================================
+
+  branch:
+    # Prefixes for different issue types (semantic branch naming)
+    prefix:
+      feature: "feat"
+      bug: "fix"
+      chore: "chore"
+
+    # Include ADF ID in branch name for tracking?
+    include_adf_id: true
+
+    # Include issue number in branch name?
+    include_issue_number: true
+
+  # ===========================================================================
+  # AGENT CONFIGURATION
+  # ===========================================================================
+
+  # Configure which slash commands each agent uses
+  agents:
+    classifier:
+      command: "/classify_issue"
+
+    planner:
+      feature: "/feature"
+      bug: "/bug"
+      chore: "/chore"
+
+    implementor:
+      command: "/implement"
+
+    branch_generator:
+      command: "/generate_branch_name"
+
+    pr_creator:
+      command: "/pull_request"
+
+  # ===========================================================================
+  # OUTPUT PATHS
+  # ===========================================================================
+
+  paths:
+    # Where to store implementation plans
+    specs: "specs"
+
+    # Where to store agent execution logs and artifacts
+    agents: "agents"
+
+  # ===========================================================================
+  # GITHUB INTEGRATION
+  # ===========================================================================
+
+  github:
+    # How should ADF comment on issues?
+    # Options: "single_updated" (one comment, updated as progress changes)
+    #          "multiple" (new comment for each stage)
+    comment_strategy: "single_updated"
+
+    # Include link to workflow run in issue comments?
+    include_workflow_link: true
+
+    # Automatically assign PR to the issue creator?
+    auto_assign_pr: true
+
+    # Add labels to PRs?
+    pr_labels:
+      - "automated"
+      - "adf"
+
+  # ===========================================================================
+  # EXECUTION OPTIONS
+  # ===========================================================================
+
+  execution:
+    # Maximum execution time in minutes (prevents runaway workflows)
+    max_execution_time: 30
+
+    # Enable verbose logging in agent outputs?
+    verbose: false
+
+    # Upload artifacts even if workflow fails?
+    upload_artifacts_on_failure: true
+
+    # Retry failed agents?
+    retry_on_failure: false
+    max_retries: 1
+
+# =============================================================================
+# PROJECT-SPECIFIC SETTINGS
+# =============================================================================
+
+project:
+  # Programming language (auto-detected if not set)
+  # Options: python, javascript, typescript, go, rust, java, etc.
+  language: null
+
+  # Test command to run before creating PR
+  # Examples: "pytest", "npm test", "go test ./...", "cargo test"
+  test_command: null
+
+  # Build command to verify project builds successfully
+  # Examples: "python -m build", "npm run build", "go build"
+  build_command: null
+
+  # Linter command to ensure code quality
+  # Examples: "ruff check .", "eslint .", "golangci-lint run"
+  lint_command: null
+
+  # Formatter command to ensure consistent code style
+  # Examples: "black .", "prettier --write .", "gofmt -w ."
+  format_command: null
+
+# =============================================================================
+# NOTIFICATIONS (Future Feature)
+# =============================================================================
+
+notifications:
+  # Enable Slack notifications?
+  slack:
+    enabled: false
+    webhook_url: ""
+    channel: "#adf-notifications"
+
+  # Enable Discord notifications?
+  discord:
+    enabled: false
+    webhook_url: ""
+
+  # Enable email notifications?
+  email:
+    enabled: false
+    recipients: []
