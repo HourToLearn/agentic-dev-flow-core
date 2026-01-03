@@ -95,20 +95,11 @@ def check_git_repo() -> CheckResult:
         repo_url = get_repo_url()
         repo_path = extract_repo_path(repo_url)
 
-        # Check if still using disler's repo
-        is_disler_repo = "disler" in repo_path.lower()
-
         return CheckResult(
             success=True,
-            warning=(
-                "Repository still points to 'disler'. Please update to your own GitHub repository."
-                if is_disler_repo
-                else None
-            ),
             details={
                 "repo_url": repo_url,
                 "repo_path": repo_path,
-                "is_disler_repo": is_disler_repo,
             },
         )
     except ValueError as e:
@@ -136,7 +127,7 @@ def check_claude_code() -> CheckResult:
         )
 
     # Test with a simple prompt
-    test_prompt = "What is 2+2? Just respond with the number, nothing else."
+    test_prompt = "What is 3+3? Just respond with the number, nothing else."
 
     # Prepare environment
     env = os.environ.copy()
@@ -194,7 +185,7 @@ def check_claude_code() -> CheckResult:
         return CheckResult(
             success=claude_responded,
             details={
-                "test_passed": "4" in response_text,
+                "test_passed": "6" in response_text,
                 "response": response_text[:100] if response_text else "No response",
             },
         )
