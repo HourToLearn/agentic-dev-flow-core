@@ -6,7 +6,7 @@
 """
 ADF Plan & Build - Agentic Dev Flow (ADF)
 
-Usage: uv run adf_plan_build.py <github-issue-number> [adf-id]
+Usage: uv run adf_orchestrator.py <github-issue-number> [adf-id]
 
 Workflow:
 1. Fetch GitHub issue details
@@ -108,9 +108,9 @@ def parse_args(logger: Optional[logging.Logger] = None) -> Tuple[str, Optional[s
     Returns (issue_number, adf_id) where adf_id may be None."""
     if len(sys.argv) < 2:
         usage_msg = [
-            "Usage: uv run adf_plan_build.py <issue-number> [adf-id]",
-            "Example: uv run adf_plan_build.py 123",
-            "Example: uv run adf_plan_build.py 123 abc12345",
+            "Usage: uv run adf_orchestrator.py <issue-number> [adf-id]",
+            "Example: uv run adf_orchestrator.py 123",
+            "Example: uv run adf_orchestrator.py 123 abc12345",
         ]
         if logger:
             for msg in usage_msg:
@@ -419,7 +419,7 @@ def main():
         adf_id = make_adf_id()
 
     # Set up logger with ADF ID
-    logger = setup_logger(adf_id, "adf_plan_build")
+    logger = setup_logger(adf_id, "adf_orchestrator")
     logger.info(f"ADF ID: {adf_id}")
 
     # Validate environment (now with logger)

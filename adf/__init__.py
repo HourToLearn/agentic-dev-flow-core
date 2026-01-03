@@ -7,7 +7,7 @@ This package contains the core modules for the ADF system:
 - agent: Claude Code CLI integration
 - utils: Utility functions
 - health_check: System health validation
-- adf_plan_build: Main orchestrator (to be renamed to adf_orchestrator)
+- adf_orchestrator: Main orchestrator
 """
 
 __version__ = "1.0.0"

@@ -41,7 +41,7 @@ gh auth login
 cd agentic-dev-flow-core/adf/
 
 # Process a single issue manually
-uv run adf_plan_build.py 123
+uv run adf_orchestrator.py 123
 
 # Run continuous monitoring (polls every 20 seconds)
 uv run trigger_cron.py
@@ -52,13 +52,13 @@ uv run trigger_webhook.py
 
 ## Script Usage Guide
 
-### adf_plan_build.py - Process Single Issue
+### adf_orchestrator.py - Process Single Issue
 
 Executes the complete ADF workflow for a specific GitHub issue.
 
 ```bash
 # Basic usage
-uv run adf_plan_build.py 456
+uv run adf_orchestrator.py 456
 
 # What it does:
 # 1. Fetches issue #456 from GitHub
@@ -168,7 +168,7 @@ cat agents/*/sdlc_planner/raw_output.jsonl | tail -1 | jq .
 
 ```bash
 export ADF_DEBUG=true
-uv run adf_plan_build.py 123  # Verbose output
+uv run adf_orchestrator.py 123  # Verbose output
 ```
 
 ## Configuration
@@ -202,7 +202,7 @@ agents/
 - `agent.py` - Claude Code CLI integration
 - `data_types.py` - Pydantic models for type safety
 - `github.py` - GitHub API operations
-- `adf_plan_build.py` - Main workflow orchestration
+- `adf_orchestrator.py` - Main workflow orchestration
 
 ### Branch Naming
 

@@ -12,22 +12,22 @@ def make_adf_id() -> str:
     return str(uuid.uuid4())[:8]
 
 
-def setup_logger(adf_id: str, trigger_type: str = "adf_plan_build") -> logging.Logger:
+def setup_logger(adf_id: str, trigger_type: str = "adf_orchestrator") -> logging.Logger:
     """Set up logger that writes to both console and file using adf_id.
 
     Args:
         adf_id: The ADF workflow ID
-        trigger_type: Type of trigger (adf_plan_build, trigger_webhook, etc.)
+        trigger_type: Type of trigger (adf_orchestrator, trigger_webhook, etc.)
 
     Returns:
         Configured logger instance
     """
-    # Create log directory: agents/{adf_id}/adf_plan_build/
+    # Create log directory: agents/{adf_id}/adf_orchestrator/
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     log_dir = os.path.join(project_root, "agents", adf_id, trigger_type)
     os.makedirs(log_dir, exist_ok=True)
     
-    # Log file path: agents/{adf_id}/adf_plan_build/execution.log
+    # Log file path: agents/{adf_id}/adf_orchestrator/execution.log
     log_file = os.path.join(log_dir, "execution.log")
     
     # Create logger with unique name using adf_id
