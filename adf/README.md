@@ -43,11 +43,6 @@ cd agentic-dev-flow-core/adf/
 # Process a single issue manually
 uv run adf_orchestrator.py 123
 
-# Run continuous monitoring (polls every 20 seconds)
-uv run trigger_cron.py
-
-# Start webhook server (for instant GitHub events)
-uv run trigger_webhook.py
 ```
 
 ## Script Usage Guide
@@ -78,40 +73,6 @@ Working on branch: feat-456-e5f6g7h8-add-user-authentication
 plan_file_path: specs/add-user-authentication-system-plan.md
 Pull request created: https://github.com/owner/repo/pull/789
 ```
-
-### trigger_cron.py - Automated Monitoring
-
-Continuously monitors GitHub for new issues or "adf" comments.
-
-```bash
-# Start monitoring
-uv run trigger_cron.py
-
-# Processes issues when:
-# - New issue has no comments
-# - Latest comment on any issue is exactly "adf"
-```
-
-### trigger_webhook.py - GitHub Webhook Server
-
-Receives real-time GitHub events for instant processing.
-
-```bash
-# Start webhook server (default port 8001)
-uv run trigger_webhook.py
-
-# Custom port
-PORT=3000 uv run trigger_webhook.py
-
-# Configure GitHub webhook:
-# URL: https://your-server.com/gh-webhook
-# Events: Issues, Issue comments
-```
-
-**Endpoints:**
-
-- `/gh-webhook` - Receives GitHub events
-- `/health` - Health check endpoint
 
 ## How ADF Works
 
