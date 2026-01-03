@@ -139,7 +139,34 @@ def classify_issue(
     issue: GitHubIssue, adf_id: str, logger: logging.Logger
 ) -> Tuple[Optional[IssueClassSlashCommand], Optional[str]]:
     """Classify GitHub issue and return appropriate slash command.
+    
+    First checks if issue has a classification label (bug/feature/chore).
+    If found, uses that. Otherwise, uses AGENT_CLASSIFIER to determine type.
+    
     Returns (command, error_message) tuple."""
+    
+    # Check if issue already has a classification label
+    valid_labels = {"bug", "feature", "chore"}
+    found_labels = []
+    
+    for label in issue.labels:
+        label_name = label.name.lower()
+        if label_name in valid_labels:
+            found_labels.append(label_name)
+    
+    # If exactly one valid label found, use it
+    if len(found_labels) == 1:
+        command = f"/{found_labels[0]}"
+        logger.info(f"Using label-based classification: {command}")
+        return command, None  # type: ignore
+    
+    # If multiple valid labels found, that's ambiguous
+    if len(found_labels) > 1:
+        return None, f"Multiple classification labels found: {', '.join(found_labels)}. Please use only one."
+    
+    # No label found, use AGENT_CLASSIFIER
+    logger.info("No classification label found, using AGENT_CLASSIFIER")
+    
     issue_template_request = AgentTemplateRequest(
         agent_name=AGENT_CLASSIFIER,
         slash_command="/classify_issue",
