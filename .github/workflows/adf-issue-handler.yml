@@ -45,6 +45,10 @@ jobs:
     needs: health-check
     if: |
       needs.health-check.outputs.healthy == 'true' &&
+      contains(
+        toJson(github.event.issue.labels),
+        '"name":"adf"'
+      ) &&
       (
         (github.event_name == 'issues' && github.event.action == 'opened') ||
         (github.event_name == 'issue_comment' && contains(github.event.comment.body, 'adf'))
