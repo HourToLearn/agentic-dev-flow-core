@@ -55,24 +55,11 @@ jobs:
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
 
-      - name: Install Claude CLI
-        run: |
-          curl -fsSL https://install.claude.ai | sh
-          # Verify the binary was actually created
-          ls -la $HOME/.local/bin/claude || echo "Claude binary not found after installation!"
-
-      - name: Setup Claude CLI Path
-        run: |
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-
-      - name: Authenticate Claude CLI
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: |
-          if [ -z "$ANTHROPIC_API_KEY" ]; then
-            echo "Error: ANTHROPIC_API_KEY is not set"
-            exit 1
-          fi
+      - name: Test Claude Code Action
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: "echo 'Hello from Claude'"
 
       - name: Verify Claude CLI
         run: |
