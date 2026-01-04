@@ -5,6 +5,8 @@ import sys
 import os
 import json
 import re
+import anthropic
+from anthropic import Anthropic
 from typing import Optional, List, Dict, Any, Tuple
 from dotenv import load_dotenv
 from .data_types import (
@@ -149,8 +151,7 @@ def save_prompt(prompt: str, adf_id: str, agent_name: str = "ops") -> None:
     
     print(f"Saved prompt to: {prompt_file}")
 
-
-def prompt_claude_code(request: AgentPromptRequest) -> AgentPromptResponse:
+def execute_via_cli_wrapper(request: AgentPromptRequest) -> AgentPromptResponse:
     """Execute Claude Code with the given prompt configuration."""
 
     # Check if Claude Code CLI is installed
@@ -232,28 +233,101 @@ def prompt_claude_code(request: AgentPromptRequest) -> AgentPromptResponse:
         return AgentPromptResponse(output=error_msg, success=False, session_id=None)
 
 
+def build_prompt_from_template(request: AgentTemplateRequest) -> str:
+    """Build prompt string from template request."""
+    return f"{request.slash_command} {' '.join(request.args)}"
+
+
+def execute_via_api(request: AgentTemplateRequest) -> AgentPromptResponse:
+    """Execute using Anthropic API (for CI/CD)."""
+    try:
+        # Get API key
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            return AgentPromptResponse(
+                output="Error: ANTHROPIC_API_KEY not set",
+                success=False,
+                session_id=None
+            )
+        
+        # Build prompt
+        prompt = build_prompt_from_template(request)
+        
+        # Save prompt (for logging)
+        save_prompt(prompt, request.adf_id, request.agent_name)
+        
+        # Initialize client
+        client = Anthropic(api_key=api_key)
+        
+        # Make API call
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=4096,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        
+        # Extract text from response
+        output_text = response.content[0].text
+        
+        # Save output for debugging
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        output_dir = os.path.join(project_root, "agents", request.adf_id, request.agent_name)
+        os.makedirs(output_dir, exist_ok=True)
+        output_file = os.path.join(output_dir, "api_output.txt")
+        
+        with open(output_file, "w") as f:
+            f.write(output_text)
+        
+        print(f"API output saved to: {output_file}")
+        
+        return AgentPromptResponse(
+            output=output_text,
+            success=True,
+            session_id=response.id  # Use API response ID
+        )
+        
+    except Exception as e:
+        error_msg = f"Error calling Anthropic API: {e}"
+        print(error_msg, file=sys.stderr)
+        return AgentPromptResponse(
+            output=error_msg,
+            success=False,
+            session_id=None
+        )
+
+
 def execute_template(request: AgentTemplateRequest) -> AgentPromptResponse:
-    """Execute a Claude Code template with slash command and arguments."""
-    # Construct prompt from slash command and args
-    prompt = f"{request.slash_command} {' '.join(request.args)}"
+    """Execute a Claude Code template with slash command and arguments.
     
-    # Create output directory with adf_id at project root
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    output_dir = os.path.join(project_root, "agents", request.adf_id, request.agent_name)
-    os.makedirs(output_dir, exist_ok=True)
+    Uses API in CI environments (GitHub Actions), CLI for local development.
+    """
+    # Check environment
+    is_ci = os.getenv("GITHUB_ACTIONS") == "true"
+    
+    if is_ci:
+        # Use API in CI
+        return execute_via_api(request)
+    else:
+        # Use CLI locally - existing logic
+        prompt = build_prompt_from_template(request)
+        
+        # Create output directory with adf_id at project root
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        output_dir = os.path.join(project_root, "agents", request.adf_id, request.agent_name)
+        os.makedirs(output_dir, exist_ok=True)
 
-    # Build output file path
-    output_file = os.path.join(output_dir, "raw_output.jsonl")
+        # Build output file path
+        output_file = os.path.join(output_dir, "raw_output.jsonl")
 
-    # Create prompt request with specific parameters
-    prompt_request = AgentPromptRequest(
-        prompt=prompt,
-        adf_id=request.adf_id,
-        agent_name=request.agent_name,
-        model=request.model,
-        dangerously_skip_permissions=True,
-        output_file=output_file,
-    )
+        # Create prompt request with specific parameters
+        prompt_request = AgentPromptRequest(
+            prompt=prompt,
+            adf_id=request.adf_id,
+            agent_name=request.agent_name,
+            model=request.model,
+            dangerously_skip_permissions=True,
+            output_file=output_file,
+        )
 
-    # Execute and return response (prompt_claude_code now handles all parsing)
-    return prompt_claude_code(prompt_request)
+        # Execute via CLI
+        return execute_via_cli_wrapper(prompt_request)

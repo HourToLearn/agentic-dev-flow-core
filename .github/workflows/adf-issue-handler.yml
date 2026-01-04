@@ -10,7 +10,6 @@ permissions:
   contents: write
   issues: write
   pull-requests: write
-  id-token: write
 
 jobs:
   process-issue:
@@ -19,11 +18,12 @@ jobs:
       (
         github.event_name == 'issues' && github.event.action == 'opened' && 
         contains(toJson(github.event.issue.labels.*.name), 'adf')
-        ) || (
+      ) || (
         github.event_name == 'issue_comment' && contains(github.event.comment.body, 'adf') && 
         contains(toJson(github.event.issue.labels.*.name), 'adf')
       )
     runs-on: ubuntu-latest
+    
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,8 +39,7 @@ jobs:
           cache-dependency-path: requirements-adf.txt
 
       - name: Install Python dependencies
-        run: |
-          pip install -r requirements-adf.txt
+        run: pip install -r requirements-adf.txt
 
       - name: Install GitHub CLI
         run: |
@@ -53,105 +52,90 @@ jobs:
           sudo apt install gh -y
 
       - name: Authenticate GitHub CLI
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
-
-      - name: Test Claude Code Action
-        uses: anthropics/claude-code-action@v1
-        with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          prompt: "echo 'Hello from Claude'"
-
-      - name: Verify Claude CLI
-        run: |
-          claude --version
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
 
       - name: Configure Git
         run: |
-          git config user.name "ADF Bot"
-          git config user.email "adf-bot@users.noreply.github.com"
-
-      - name: Get Issue Number
-        id: issue
-        run: |
-          if [ "${{ github.event_name }}" == "issues" ]; then
-            echo "number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
-          else
-            echo "number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
-          fi
+          git config --global user.name "adf-bot"
+          git config --global user.email "adf-bot@users.noreply.github.com"
 
       - name: Run ADF Orchestrator
+        id: adf
+        continue-on-error: true
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CLAUDE_CODE_PATH: claude
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_REPO_URL: ${{ github.server_url }}/${{ github.repository }}
         run: |
-          python -m adf.adf_orchestrator ${{ steps.issue.outputs.number }}
-        continue-on-error: true
-        id: orchestrator
+          echo "Running ADF orchestrator for issue #${{ github.event.issue.number }}"
+          python -m adf.adf_orchestrator ${{ github.event.issue.number }}
 
-      - name: Upload Artifacts
-        if: always()
+      - name: Comment on Success
+        if: success()
+        run: |
+          gh issue comment ${{ github.event.issue.number }} --body "✅ **ADF Workflow Completed Successfully**
+          
+          The automated development workflow has finished processing this issue.
+          
+          - 🔗 [View workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          - 📋 Check the comments above for detailed progress
+          - 🔍 Review the generated PR (if applicable)
+          
+          ---
+          *Triggered by: @${{ github.actor }}*"
+
+      - name: Comment on Failure
+        if: failure()
+        run: |
+          gh issue comment ${{ github.event.issue.number }} --body "❌ **ADF Workflow Failed**
+          
+          The automated development workflow encountered an error while processing this issue.
+          
+          **Next Steps:**
+          1. 🔗 [Check the workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details
+          2. 📥 Download the artifact logs from the workflow run
+          3. 🔧 Fix any issues and try again with a new comment containing 'adf'
+          
+          **Common Issues:**
+          - Missing or invalid \`ANTHROPIC_API_KEY\`
+          - GitHub CLI authentication problems
+          - Invalid issue format or missing information
+          
+          ---
+          *Triggered by: @${{ github.actor }}*"
+
+      - name: Upload logs on failure
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: adf-artifacts-issue-${{ steps.issue.outputs.number }}
+          name: adf-logs-${{ github.run_id }}
           path: |
             agents/
             specs/
             adf-logs/
-          retention-days: 30
+          retention-days: 7
 
-      - name: Comment on Success
-        if: steps.orchestrator.outcome == 'success'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const workflowUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
-            await github.rest.issues.createComment({
-              issue_number: ${{ steps.issue.outputs.number }},
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `## ✅ ADF Workflow Completed Successfully!
-            
-            **Workflow Run**: [View Logs](${workflowUrl})
-            
-            The implementation has been completed and a pull request should have been created.
-            
-            ---
-            *Generated by ADF (Agentic Dev Flow)*`
-            });
-
-      - name: Comment on Failure
-        if: steps.orchestrator.outcome == 'failure'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const workflowUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
-            await github.rest.issues.createComment({
-              issue_number: ${{ steps.issue.outputs.number }},
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `## ❌ ADF Workflow Failed
-            
-            **Workflow Run**: [View Logs](${workflowUrl})
-            
-            The automated implementation encountered an error. Please check the logs for details.
-            
-            ---
-            *Generated by ADF (Agentic Dev Flow)*`
-            });
-
-  cleanup:
-    name: Cleanup on Failure
-    needs: process-issue
-    if: failure()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Cleanup artifacts
+      - name: Cleanup on Failure
+        if: failure()
         run: |
-          echo "Performing cleanup operations..."
+          echo "Cleaning up resources..."
+          
+          # Get current branch (if created)
+          CURRENT_BRANCH=$(git branch --show-current)
+          
+          # If we're not on main/master, try to clean up
+          if [[ "$CURRENT_BRANCH" != "main" && "$CURRENT_BRANCH" != "master" ]]; then
+            echo "Attempting to clean up branch: $CURRENT_BRANCH"
+            
+            # Switch back to main
+            git checkout main 2>/dev/null || git checkout master 2>/dev/null || true
+            
+            # Delete the branch locally if it exists
+            git branch -D "$CURRENT_BRANCH" 2>/dev/null || true
+            
+            # Delete remote branch if it was pushed
+            git push origin --delete "$CURRENT_BRANCH" 2>/dev/null || true
+            
+            echo "Cleanup completed"
+          else
+            echo "No cleanup needed - on main branch"
+          fi

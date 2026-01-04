@@ -77,10 +77,15 @@ def get_github_context() -> dict:
 
 def check_env_vars(logger: Optional[logging.Logger] = None) -> None:
     """Check that all required environment variables are set."""
-    required_vars = [
-        "ANTHROPIC_API_KEY",
-        "CLAUDE_CODE_PATH",
-    ]
+    is_ci = os.getenv("GITHUB_ACTIONS") == "true"
+    
+    # ANTHROPIC_API_KEY always required
+    required_vars = ["ANTHROPIC_API_KEY"]
+    
+    # CLAUDE_CODE_PATH only required for local development
+    if not is_ci:
+        required_vars.append("CLAUDE_CODE_PATH")
+
     missing_vars = [var for var in required_vars if not os.getenv(var)]
 
     if missing_vars:
