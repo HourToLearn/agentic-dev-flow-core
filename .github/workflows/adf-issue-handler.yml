@@ -16,13 +16,11 @@ jobs:
   process-issue:
     name: Process Issue
     if: |
-      (
-        github.event_name == 'issues' && github.event.action == 'opened' && 
-        contains(toJson(github.event.issue.labels.*.name), 'adf')
-        ) || (
-        github.event_name == 'issue_comment' && contains(github.event.comment.body, 'adf') && 
-        contains(toJson(github.event.issue.labels.*.name), 'adf')
-      )
+      (github.event_name == 'issues' && github.event.action == 'opened' && 
+      contains(github.event.issue.labels.*.name, 'adf')) 
+      ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, 'adf') && 
+      contains(github.event.issue.labels.*.name, 'adf'))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -39,8 +37,7 @@ jobs:
           cache-dependency-path: requirements-adf.txt
 
       - name: Install Python dependencies
-        run: |
-          pip install -r requirements-adf.txt
+        run: pip install -r requirements-adf.txt
 
       - name: Install GitHub CLI
         run: |
@@ -52,14 +49,11 @@ jobs:
           sudo apt update
           sudo apt install gh -y
 
-      - name: Authenticate GitHub CLI
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
-
       - name: Test Claude Code Action
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: "echo 'Hello from Claude'"
 
       - name: Verify Claude CLI
@@ -73,17 +67,13 @@ jobs:
 
       - name: Get Issue Number
         id: issue
-        run: |
-          if [ "${{ github.event_name }}" == "issues" ]; then
-            echo "number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
-          else
-            echo "number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
-          fi
+        run: echo "number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
 
       - name: Run ADF Orchestrator
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CLAUDE_CODE_PATH: claude
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_REPO_URL: ${{ github.server_url }}/${{ github.repository }}
