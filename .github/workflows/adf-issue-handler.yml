@@ -12,40 +12,9 @@ permissions:
   pull-requests: write
 
 jobs:
-  health-check:
-    name: Health Check
-    runs-on: ubuntu-latest
-    outputs:
-      healthy: ${{ steps.check.outputs.healthy }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-          cache: 'pip'
-          cache-dependency-path: requirements-adf.txt
-
-      - name: Install dependencies
-        run: |
-          pip install -r requirements-adf.txt
-
-      - name: Run health check
-        id: check
-        run: |
-          if python -m adf.health_check; then
-            echo "healthy=true" >> $GITHUB_OUTPUT
-          else
-            echo "healthy=false" >> $GITHUB_OUTPUT
-          fi
-
   process-issue:
     name: Process Issue
-    needs: health-check
     if: |
-      needs.health-check.outputs.healthy == 'true' &&
       contains(
         toJson(github.event.issue.labels),
         '"name":"adf"'
