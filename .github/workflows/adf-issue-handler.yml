@@ -58,6 +58,8 @@ jobs:
       - name: Install Claude CLI
         run: |
           curl -fsSL https://install.claude.ai | sh
+          # Verify the binary was actually created
+          ls -la $HOME/.local/bin/claude || echo "Claude binary not found after installation!"
 
       - name: Setup Claude CLI Path
         run: |
