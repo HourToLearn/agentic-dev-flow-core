@@ -15,13 +15,12 @@ jobs:
   process-issue:
     name: Process Issue
     if: |
-      contains(
-        toJson(github.event.issue.labels),
-        '"name":"adf"'
-      ) &&
       (
-        (github.event_name == 'issues' && github.event.action == 'opened') ||
-        (github.event_name == 'issue_comment' && contains(github.event.comment.body, 'adf'))
+        github.event_name == 'issues' && github.event.action == 'opened' && 
+        contains(toJson(github.event.issue.labels.*.name), 'adf')
+        ) || (
+        github.event_name == 'issue_comment' && contains(github.event.comment.body, 'adf') && 
+        contains(toJson(github.event.issue.labels.*.name), 'adf')
       )
     runs-on: ubuntu-latest
     steps:
