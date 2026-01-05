@@ -437,6 +437,17 @@ def main():
     issue: GitHubIssue = fetch_issue(issue_number, repo_path)
 
     logger.debug(f"issue: {issue.model_dump_json(indent=2, by_alias=True)}")
+ 
+    # Check if the issue is actually a Pull Request
+    if "/pull/" in issue.url:
+        error_msg = "ADF does not currently support running on Pull Requests. Please use a regular Issue."
+        logger.error(error_msg)
+        make_issue_comment(
+            issue_number,
+            format_issue_message(adf_id, "ops", f"❌ {error_msg}"),
+        )
+        sys.exit(1)
+
     make_issue_comment(
         issue_number, format_issue_message(adf_id, "ops", f"✅ Starting ADF workflow")
     )
