@@ -10,49 +10,17 @@ permissions:
   contents: write
   issues: write
   pull-requests: write
+  id-token: write
 
 jobs:
-  health-check:
-    name: Health Check
-    runs-on: ubuntu-latest
-    outputs:
-      healthy: ${{ steps.check.outputs.healthy }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-          cache: 'pip'
-
-      - name: Install dependencies
-        run: |
-          pip install -r requirements-adf.txt
-
-      - name: Run health check
-        id: check
-        run: |
-          if python -m adf.health_check; then
-            echo "healthy=true" >> $GITHUB_OUTPUT
-          else
-            echo "healthy=false" >> $GITHUB_OUTPUT
-          fi
-
   process-issue:
     name: Process Issue
-    needs: health-check
     if: |
-      needs.health-check.outputs.healthy == 'true' &&
-      contains(
-        toJson(github.event.issue.labels),
-        '"name":"adf"'
-      ) &&
-      (
-        (github.event_name == 'issues' && github.event.action == 'opened') ||
-        (github.event_name == 'issue_comment' && contains(github.event.comment.body, 'adf'))
-      )
+      (github.event_name == 'issues' && github.event.action == 'opened' && 
+      contains(github.event.issue.labels.*.name, 'adf')) 
+      ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, 'adf') && 
+      contains(github.event.issue.labels.*.name, 'adf'))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -66,10 +34,10 @@ jobs:
         with:
           python-version: '3.12'
           cache: 'pip'
+          cache-dependency-path: requirements-adf.txt
 
       - name: Install Python dependencies
-        run: |
-          pip install -r requirements-adf.txt
+        run: pip install -r requirements-adf.txt
 
       - name: Install GitHub CLI
         run: |
@@ -81,26 +49,12 @@ jobs:
           sudo apt update
           sudo apt install gh -y
 
-      - name: Authenticate GitHub CLI
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
-
-      - name: Install Claude CLI
-        run: |
-          curl -fsSL https://install.claude.ai | sh
-
-      - name: Setup Claude CLI Path
-        run: |
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-
-      - name: Authenticate Claude CLI
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: |
-          if [ -z "$ANTHROPIC_API_KEY" ]; then
-            echo "Error: ANTHROPIC_API_KEY is not set"
-            exit 1
-          fi
+      - name: Test Claude Code Action
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: "echo 'Hello from Claude'"
 
       - name: Verify Claude CLI
         run: |
@@ -113,17 +67,13 @@ jobs:
 
       - name: Get Issue Number
         id: issue
-        run: |
-          if [ "${{ github.event_name }}" == "issues" ]; then
-            echo "number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
-          else
-            echo "number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
-          fi
+        run: echo "number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
 
       - name: Run ADF Orchestrator
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CLAUDE_CODE_PATH: claude
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_REPO_URL: ${{ github.server_url }}/${{ github.repository }}
