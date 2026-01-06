@@ -398,10 +398,21 @@ def check_error(
         error = error_or_response
 
     if error:
+        # Determine log location based on environment
+        log_info = ""
+        if is_github_actions():
+            context = get_github_context()
+            run_url = context.get("run_url", "")
+            if run_url:
+                log_info = f"\n\n🔍 **View detailed logs**: [GitHub Actions Run]({run_url})"
+        else:
+            # Local execution
+            log_info = f"\n\n🔍 **Check local logs in**: `adf-logs/` directory"
+
         logger.error(f"{error_prefix}: {error}")
         make_issue_comment(
             issue_number,
-            format_issue_message(adf_id, agent_name, f"❌ {error_prefix}: {error}"),
+            format_issue_message(adf_id, agent_name, f"❌ {error_prefix}: {error}{log_info}"),
         )
         sys.exit(1)
 
@@ -437,144 +448,163 @@ def main():
     issue: GitHubIssue = fetch_issue(issue_number, repo_path)
 
     logger.debug(f"issue: {issue.model_dump_json(indent=2, by_alias=True)}")
+ 
+    # Check if the issue is actually a Pull Request
+    if "/pull/" in issue.url:
+        error_msg = "ADF does not currently support running on Pull Requests. Please use a regular Issue."
+        logger.error(error_msg)
+        make_issue_comment(
+            issue_number,
+            format_issue_message(adf_id, "ops", f"❌ {error_msg}"),
+        )
+        sys.exit(1)
+
     make_issue_comment(
         issue_number, format_issue_message(adf_id, "ops", f"✅ Starting ADF workflow")
     )
 
     # Classify the issue
     issue_command: IssueClassSlashCommand
-    issue_command, error = classify_issue(issue, adf_id, logger)
+    with log_group("Classify Issue"):
+        issue_command, error = classify_issue(issue, adf_id, logger)
 
-    check_error(error, issue_number, adf_id, "ops", "Error classifying issue", logger)
+        check_error(error, issue_number, adf_id, "ops", "Error classifying issue", logger)
 
-    logger.info(f"issue_command: {issue_command}")
-    make_issue_comment(
-        issue_number,
-        format_issue_message(adf_id, "ops", f"✅ Issue classified as: {issue_command}"),
-    )
+        logger.info(f"issue_command: {issue_command}")
+        make_issue_comment(
+            issue_number,
+            format_issue_message(adf_id, "ops", f"✅ Issue classified as: {issue_command}"),
+        )
 
     # Create git branch
-    branch_name, error = git_branch(issue, issue_command, adf_id, logger)
+    with log_group("Create Branch"):
+        branch_name, error = git_branch(issue, issue_command, adf_id, logger)
 
-    check_error(error, issue_number, adf_id, "ops", "Error creating branch", logger)
+        check_error(error, issue_number, adf_id, "ops", "Error creating branch", logger)
 
-    logger.info(f"Working on branch: {branch_name}")
-    make_issue_comment(
-        issue_number,
-        format_issue_message(adf_id, "ops", f"✅ Working on branch: {branch_name}"),
-    )
+        logger.info(f"Working on branch: {branch_name}")
+        make_issue_comment(
+            issue_number,
+            format_issue_message(adf_id, "ops", f"✅ Working on branch: {branch_name}"),
+        )
 
     # Build the implementation plan
-    logger.info("\n=== Building implementation plan ===")
-    make_issue_comment(
-        issue_number,
-        format_issue_message(adf_id, AGENT_PLANNER, "✅ Building implementation plan"),
-    )
+    with log_group("Build Implementation Plan"):
+        logger.info("\n=== Building implementation plan ===")
+        make_issue_comment(
+            issue_number,
+            format_issue_message(adf_id, AGENT_PLANNER, "✅ Building implementation plan"),
+        )
 
-    issue_plan_response: AgentPromptResponse = build_plan(
-        issue, issue_command, adf_id, logger
-    )
+        issue_plan_response: AgentPromptResponse = build_plan(
+            issue, issue_command, adf_id, logger
+        )
 
-    check_error(
-        issue_plan_response,
-        issue_number,
-        adf_id,
-        AGENT_PLANNER,
-        "Error building plan",
-        logger,
-    )
+        check_error(
+            issue_plan_response,
+            issue_number,
+            adf_id,
+            AGENT_PLANNER,
+            "Error building plan",
+            logger,
+        )
 
-    logger.debug(f"issue_plan_response.output: {issue_plan_response.output}")
-    make_issue_comment(
-        issue_number,
-        format_issue_message(adf_id, AGENT_PLANNER, "✅ Implementation plan created"),
-    )
+        logger.debug(f"issue_plan_response.output: {issue_plan_response.output}")
+        make_issue_comment(
+            issue_number,
+            format_issue_message(adf_id, AGENT_PLANNER, "✅ Implementation plan created"),
+        )
 
     # Get the path to the plan file that was created
-    logger.info("\n=== Finding plan file ===")
+    with log_group("Find Plan File"):
+        logger.info("\n=== Finding plan file ===")
 
-    plan_file_path, error = get_plan_file(issue_plan_response.output, adf_id, logger)
+        plan_file_path, error = get_plan_file(issue_plan_response.output, adf_id, logger)
 
-    check_error(error, issue_number, adf_id, "ops", "Error finding plan file", logger)
+        check_error(error, issue_number, adf_id, "ops", "Error finding plan file", logger)
 
-    logger.info(f"plan_file_path: {plan_file_path}")
-    make_issue_comment(
-        issue_number,
-        format_issue_message(adf_id, "ops", f"✅ Plan file created: {plan_file_path}"),
-    )
+        logger.info(f"plan_file_path: {plan_file_path}")
+        make_issue_comment(
+            issue_number,
+            format_issue_message(adf_id, "ops", f"✅ Plan file created: {plan_file_path}"),
+        )
 
     # Commit the plan
-    logger.info("\n=== Committing plan ===")
-    make_issue_comment(
-        issue_number, format_issue_message(adf_id, AGENT_PLANNER, "✅ Committing plan")
-    )
-    commit_msg, error = git_commit(AGENT_PLANNER, issue, issue_command, adf_id, logger)
+    with log_group("Commit Plan"):
+        logger.info("\n=== Committing plan ===")
+        make_issue_comment(
+            issue_number, format_issue_message(adf_id, AGENT_PLANNER, "✅ Committing plan")
+        )
+        commit_msg, error = git_commit(AGENT_PLANNER, issue, issue_command, adf_id, logger)
 
-    check_error(
-        error, issue_number, adf_id, AGENT_PLANNER, "Error committing plan", logger
-    )
+        check_error(
+            error, issue_number, adf_id, AGENT_PLANNER, "Error committing plan", logger
+        )
 
     # Implement the plan
-    logger.info("\n=== Implementing solution ===")
-    make_issue_comment(
-        issue_number,
-        format_issue_message(adf_id, AGENT_IMPLEMENTOR, "✅ Implementing solution"),
-    )
-    implement_response: AgentPromptResponse = implement_plan(
-        plan_file_path, adf_id, logger
-    )
+    with log_group("Implement Solution"):
+        logger.info("\n=== Implementing solution ===")
+        make_issue_comment(
+            issue_number,
+            format_issue_message(adf_id, AGENT_IMPLEMENTOR, "✅ Implementing solution"),
+        )
+        implement_response: AgentPromptResponse = implement_plan(
+            plan_file_path, adf_id, logger
+        )
 
-    check_error(
-        implement_response,
-        issue_number,
-        adf_id,
-        AGENT_IMPLEMENTOR,
-        "Error implementing solution",
-        logger,
-    )
+        check_error(
+            implement_response,
+            issue_number,
+            adf_id,
+            AGENT_IMPLEMENTOR,
+            "Error implementing solution",
+            logger,
+        )
 
-    logger.debug(f"implement_response.output: {implement_response.output}")
-    make_issue_comment(
-        issue_number,
-        format_issue_message(adf_id, AGENT_IMPLEMENTOR, "✅ Solution implemented"),
-    )
+        logger.debug(f"implement_response.output: {implement_response.output}")
+        make_issue_comment(
+            issue_number,
+            format_issue_message(adf_id, AGENT_IMPLEMENTOR, "✅ Solution implemented"),
+        )
 
     # Commit the implementation
-    logger.info("\n=== Committing implementation ===")
-    make_issue_comment(
-        issue_number,
-        format_issue_message(adf_id, AGENT_IMPLEMENTOR, "✅ Committing implementation"),
-    )
-    commit_msg, error = git_commit(
-        AGENT_IMPLEMENTOR, issue, issue_command, adf_id, logger
-    )
+    with log_group("Commit Implementation"):
+        logger.info("\n=== Committing implementation ===")
+        make_issue_comment(
+            issue_number,
+            format_issue_message(adf_id, AGENT_IMPLEMENTOR, "✅ Committing implementation"),
+        )
+        commit_msg, error = git_commit(
+            AGENT_IMPLEMENTOR, issue, issue_command, adf_id, logger
+        )
 
-    check_error(
-        error,
-        issue_number,
-        adf_id,
-        AGENT_IMPLEMENTOR,
-        "Error committing implementation",
-        logger,
-    )
+        check_error(
+            error,
+            issue_number,
+            adf_id,
+            AGENT_IMPLEMENTOR,
+            "Error committing implementation",
+            logger,
+        )
 
     # Create pull request
-    logger.info("\n=== Creating pull request ===")
-    make_issue_comment(
-        issue_number, format_issue_message(adf_id, "ops", "✅ Creating pull request")
-    )
+    with log_group("Create Pull Request"):
+        logger.info("\n=== Creating pull request ===")
+        make_issue_comment(
+            issue_number, format_issue_message(adf_id, "ops", "✅ Creating pull request")
+        )
 
-    pr_url, error = pull_request(branch_name, issue, plan_file_path, adf_id, logger)
+        pr_url, error = pull_request(branch_name, issue, plan_file_path, adf_id, logger)
 
-    check_error(
-        error, issue_number, adf_id, "ops", "Error creating pull request", logger
-    )
+        check_error(
+            error, issue_number, adf_id, "ops", "Error creating pull request", logger
+        )
 
-    logger.info(f"\nPull request created: {pr_url}")
-    make_issue_comment(
-        issue_number,
-        format_issue_message(adf_id, "ops", f"✅ Pull request created: {pr_url}"),
-    )
+        logger.info(f"\nPull request created: {pr_url}")
+        make_issue_comment(
+            issue_number,
+            format_issue_message(adf_id, "ops", f"✅ Pull request created: {pr_url}"),
+        )
 
     logger.info(f"ADF workflow completed successfully for issue #{issue_number}")
     make_issue_comment(

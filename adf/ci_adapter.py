@@ -178,7 +178,8 @@ class LocalAdapter(CIAdapter):
                 capture_output=True,
                 text=True,
                 check=True,
-                timeout=5
+                timeout=5,
+                encoding="utf-8"
             )
             url = result.stdout.strip()
             # Extract owner/repo from URL
