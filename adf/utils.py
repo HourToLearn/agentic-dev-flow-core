@@ -38,7 +38,7 @@ def setup_logger(adf_id: str, trigger_type: str = "adf_orchestrator") -> logging
     logger.handlers.clear()
     
     # File handler - captures everything
-    file_handler = logging.FileHandler(log_file, mode='a')
+    file_handler = logging.FileHandler(log_file, mode='a', encoding='utf-8')
     file_handler.setLevel(logging.DEBUG)
     
     # Console handler - INFO and above
