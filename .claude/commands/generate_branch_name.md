@@ -6,7 +6,8 @@ Based on the `Instructions` below, take the `Variables` follow the `Run` section
 
 issue_class: $1
 adf_id: $2
-issue: $3
+issue_number: $3
+issue_title: $4
 
 ## Instructions
 
@@ -21,7 +22,7 @@ issue: $3
   - `feat-123-a1b2c3d4-add-user-auth`
   - `bug-456-e5f6g7h8-fix-login-error`
   - `chore-789-i9j0k1l2-update-dependencies`
-- Extract the issue number, title, and body from the issue JSON
+- Use the provided issue_number and issue_title to create the concise name
 
 ## Run
 

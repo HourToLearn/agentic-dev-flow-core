@@ -294,7 +294,7 @@ def git_branch(
     request = AgentTemplateRequest(
         agent_name=AGENT_BRANCH_GENERATOR,
         slash_command="/generate_branch_name",
-        args=[issue_type, adf_id, issue.model_dump_json(by_alias=True)],
+        args=[issue_type, adf_id, str(issue.number), issue.title],
         adf_id=adf_id,
         model="sonnet",
     )
